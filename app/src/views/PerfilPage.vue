@@ -14,11 +14,36 @@
           <ion-label>{{ usuario?.nombre ?? '—' }}</ion-label>
         </ion-item>
 
-        <!--
-          TODO [M7] Sección "Dispositivo" con ion-list-header y un ion-item por dato:
-            Plataforma (Capacitor.getPlatform()), Modelo, Sistema (operatingSystem + osVersion)
-            y Conexión (ion-badge con `tipo` o "sin conexión" según `conectado`).
-        -->
+        <!-- M7: información del dispositivo y de la red -->
+        <ion-list-header>Dispositivo</ion-list-header>
+
+        <ion-item>
+          <ion-icon slot="start" :icon="hardwareChipOutline" aria-hidden="true" />
+          <ion-label>Plataforma</ion-label>
+          <ion-note slot="end">{{ plataforma }}</ion-note>
+        </ion-item>
+
+        <ion-item>
+          <ion-icon slot="start" :icon="phonePortraitOutline" aria-hidden="true" />
+          <ion-label>Modelo</ion-label>
+          <ion-note slot="end">{{ dispositivo?.model ?? '—' }}</ion-note>
+        </ion-item>
+
+        <ion-item>
+          <ion-icon slot="start" :icon="settingsOutline" aria-hidden="true" />
+          <ion-label>Sistema</ion-label>
+          <ion-note slot="end">
+            {{ dispositivo ? `${dispositivo.operatingSystem} ${dispositivo.osVersion}` : '—' }}
+          </ion-note>
+        </ion-item>
+
+        <ion-item>
+          <ion-icon slot="start" :icon="wifiOutline" aria-hidden="true" />
+          <ion-label>Conexión</ion-label>
+          <ion-badge slot="end" :color="conectado ? 'success' : 'danger'">
+            {{ conectado ? tipo : 'sin conexión' }}
+          </ion-badge>
+        </ion-item>
       </ion-list>
 
       <div class="ion-padding">
@@ -34,7 +59,7 @@ import {
   IonPage, IonHeader, IonToolbar, IonTitle, IonContent, IonList, IonListHeader, IonItem, IonIcon,
   IonLabel, IonNote, IonBadge, IonButton, onIonViewWillEnter, useIonRouter,
 } from '@ionic/vue';
-import { personCircleOutline } from 'ionicons/icons';
+import { personCircleOutline, hardwareChipOutline, phonePortraitOutline, settingsOutline, wifiOutline } from 'ionicons/icons';
 import { Capacitor } from '@capacitor/core';
 import { Device, type DeviceInfo } from '@capacitor/device';
 import { useAuth } from '@/composables/useAuth';
@@ -44,10 +69,17 @@ const { usuario, cerrarSesion } = useAuth();
 const { conectado, tipo } = useConexion();
 const ionRouter = useIonRouter();
 
-// TODO [M7] Obtenga la plataforma y la información del dispositivo (Device.getInfo()) al entrar a la página.
+// M7: plataforma fija (web/android/ios) e info del dispositivo cargada al entrar.
 const plataforma = Capacitor.getPlatform();
 const dispositivo = ref<DeviceInfo | null>(null);
-void [plataforma, dispositivo, Device, onIonViewWillEnter, conectado, tipo, IonNote, IonBadge];
+
+onIonViewWillEnter(async () => {
+  try {
+    dispositivo.value = await Device.getInfo();
+  } catch {
+    dispositivo.value = null; // plugin no disponible: los datos quedan en "—"
+  }
+});
 
 async function salir() {
   await cerrarSesion();
