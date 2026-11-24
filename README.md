@@ -54,8 +54,11 @@ Cada comentario `TODO` describe exactamente lo que se espera. Los archivos marca
 
 ## Evidencia (M8)
 
-Guarde en `app/docs/evidencia-android.png` una captura de **su** app corriendo en el emulador,
-en la pestaña **Perfil** (debe verse *Plataforma: android*), y complete:
+La máquina no alcanza a ejecutar el emulador (falta de recursos de hardware) y el docente
+autorizó entregar la evidencia desde la compilación. Se adjunta
+`app/docs/evidencia-compilacion.png` con la salida de `gradlew assembleDebug`:
+**BUILD SUCCESSFUL in 4m 54s — 243 actionable tasks: 243 executed**, que genera el APK
+de depuración. Complete:
 
 - Carné: `c1893`
 - appId: `cr.ac.ucr.if0009.c1893`
