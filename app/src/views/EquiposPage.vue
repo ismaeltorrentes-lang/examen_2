@@ -45,16 +45,25 @@
         <p>No se encontraron equipos.</p>
       </div>
 
-      <!-- M4: listado -->
+      <!-- M4: listado · M6: cada ítem con deslizar para eliminar -->
       <ion-list v-else>
-        <ion-item v-for="equipo in equipos" :key="equipo.id"
-          :router-link="`/tabs/equipos/${equipo.id}/editar`">
-          <ion-label>
-            <h2>{{ equipo.nombre }}</h2>
-            <p>{{ equipo.codigo }} · {{ equipo.categoria.nombre }}</p>
-          </ion-label>
-          <ion-badge slot="end" :color="colorEstado[equipo.estado]">{{ equipo.estado }}</ion-badge>
-        </ion-item>
+        <ion-item-sliding v-for="equipo in equipos" :key="equipo.id">
+          <ion-item :router-link="`/tabs/equipos/${equipo.id}/editar`">
+            <ion-label>
+              <h2>{{ equipo.nombre }}</h2>
+              <p>{{ equipo.codigo }} · {{ equipo.categoria.nombre }}</p>
+            </ion-label>
+            <ion-badge slot="end" :color="colorEstado[equipo.estado]">{{ equipo.estado }}</ion-badge>
+          </ion-item>
+
+          <!-- M6: opción que se despliega al deslizar el ítem hacia la izquierda -->
+          <ion-item-options side="end">
+            <ion-item-option color="danger" @click="confirmarEliminacion(equipo, $event)">
+              <ion-icon slot="icon-only" :icon="trashOutline" aria-hidden="true" />
+              Eliminar
+            </ion-item-option>
+          </ion-item-options>
+        </ion-item-sliding>
       </ion-list>
 
       <!-- M4: siguiente página; se apaga cuando current_page === last_page -->
@@ -79,9 +88,6 @@ import { eliminar, listar, type Equipo, type Estado } from '@/services/equipos';
 import { ErrorApi } from '@/services/errores';
 import { mostrarToast } from '@/services/avisos';
 import { useConexion, vibrar } from '@/composables/useConexion';
-
-// Importaciones que aún no se usan en el template (se usan en M6)
-void [IonItemSliding, IonItemOptions, IonItemOption, trashOutline];
 
 const colorEstado: Record<Estado, string> = { disponible: 'success', prestado: 'warning', mantenimiento: 'medium' };
 
@@ -150,18 +156,59 @@ async function cargarMas(evento: InfiniteScrollCustomEvent) {
 }
 
 /**
- * TODO [M6] confirmarEliminacion(equipo, evento)
- *  1. Cierre el ion-item-sliding.
- *  2. alertController con dos botones: role 'cancel' y role 'destructive'.
- *     Lea el role con onDidDismiss(); si no es 'destructive', no haga nada.
+ * confirmarEliminacion(equipo, evento) — M6.
+ *  1. Cierra el ion-item-sliding (desde el elemento que recibió el clic).
+ *  2. alertController con botones 'cancel' y 'destructive'; el role se lee con onDidDismiss().
  *  3. eliminar(equipo.id):
- *       204 → quitar el equipo de la lista (sin recargar todo), vibrar() y toast de éxito.
- *       409 → toast con el mensaje que envía la API (regla R1: equipo prestado). El equipo sigue en la lista.
- *       404 → quitarlo de la lista y avisar que ya no existe.
+ *       204 → quita el equipo de la lista (sin recargar todo), vibrar() y toast de éxito.
+ *       409 → toast con el mensaje de la API (regla R1); el equipo permanece en la lista.
+ *       404 → lo quita de la lista y avisa que ya no existe.
  */
 async function confirmarEliminacion(equipo: Equipo, evento: Event) {
-  void [equipo, evento, alertController, ErrorApi, mostrarToast, vibrar, eliminar];
+  // 1. Cerrar el sliding antes de abrir el alert.
+  const sliding = (evento.currentTarget as HTMLElement | null)?.closest('ion-item-sliding');
+  if (sliding) await (sliding as HTMLIonItemSlidingElement).close();
+
+  // 2. Confirmación con roles.
+  const alert = await alertController.create({
+    header: 'Eliminar equipo',
+    message: `¿Desea eliminar "${equipo.nombre}" (${equipo.codigo})?`,
+    buttons: [
+      { text: 'Cancelar', role: 'cancel' },
+      { text: 'Eliminar', role: 'destructive' },
+    ],
+  });
+  await alert.present();
+  const { role } = await alert.onDidDismiss();
+  if (role !== 'destructive') return;
+
+  // 3. Borrar en la API.
+  try {
+    await eliminar(equipo.id);
+    quitarDeLaLista(equipo.id);   // 204: sin recargar todo
+    await vibrar();
+    mostrarToast('Equipo eliminado.', 'success');
+  } catch (e) {
+    if (e instanceof ErrorApi && e.status === 409) {
+      // Regla R1 (equipo prestado): el mensaje lo manda la API y el ítem permanece.
+      mostrarToast(e.message, 'warning');
+    } else if (e instanceof ErrorApi && e.status === 404) {
+      // Ya no existe: sacarlo de la lista y avisar.
+      quitarDeLaLista(equipo.id);
+      mostrarToast('El equipo ya no existe.', 'warning');
+    } else if (e instanceof ErrorApi && e.status === 401) {
+      // api.ts ya olvidó la sesión y navegó a /login.
+    } else {
+      mostrarToast('No fue posible eliminar el equipo.', 'danger');
+    }
+  }
 }
 
-void [confirmarEliminacion]; // M6, aún pendiente
+/** M6: quita un equipo de la lista en memoria, sin volver a pedir la página. */
+function quitarDeLaLista(id: number) {
+  const antes = equipos.value.length;
+  equipos.value = equipos.value.filter((e) => e.id !== id);
+  // Si se borró el último de la página y había más, recargamos la actual para no dejar un hueco.
+  if (equipos.value.length === antes - 1 && equipos.value.length === 0 && hayMas.value) void cargar(true);
+}
 </script>
