@@ -19,20 +19,48 @@
     </ion-header>
 
     <ion-content>
-      <!--
-        TODO [M4] Listado (10 pts)
-          - ion-refresher (slot="fixed") que vuelve a la página 1.
-          - Mientras carga la primera página: ion-skeleton-text (no un spinner a pantalla completa).
-          - Si falla la carga: mensaje + botón "Reintentar".
-          - Si no hay resultados: estado vacío (use la clase .estado-vacio de theme/variables.css).
-          - ion-list con un ion-item por equipo: nombre, "código · categoría", ion-badge con el estado
-            (colorEstado) y router-link a /tabs/equipos/{id}/editar.
-          - ion-infinite-scroll que pide la siguiente página; se deshabilita cuando no hay más
-            (meta.current_page / meta.last_page).
+      <!-- M4: refresher que vuelve a la página 1 -->
+      <ion-refresher slot="fixed" @ionRefresh="refrescar">
+        <ion-refresher-content></ion-refresher-content>
+      </ion-refresher>
 
-        TODO [M6] Eliminación (8 pts)
-          - Envuelva cada ion-item en ion-item-sliding con un ion-item-option "Eliminar" (color danger).
-      -->
+      <!-- M4: primera carga → esqueleto (no un spinner a pantalla completa) -->
+      <div v-if="cargando && equipos.length === 0" class="ion-padding" aria-busy="true">
+        <ion-skeleton-text :animated="true" style="width: 60%"></ion-skeleton-text>
+        <ion-skeleton-text :animated="true" style="width: 85%"></ion-skeleton-text>
+        <ion-skeleton-text :animated="true" style="width: 75%"></ion-skeleton-text>
+        <ion-skeleton-text :animated="true" style="width: 80%"></ion-skeleton-text>
+      </div>
+
+      <!-- M4: falló la carga → mensaje + Reintentar -->
+      <div v-else-if="error" class="estado-vacio">
+        <ion-icon :icon="cloudOfflineOutline" aria-hidden="true" />
+        <p>{{ error }}</p>
+        <ion-button class="ion-margin-top" @click="cargar(true)">Reintentar</ion-button>
+      </div>
+
+      <!-- M4: sin resultados -->
+      <div v-else-if="equipos.length === 0" class="estado-vacio">
+        <ion-icon :icon="searchOutline" aria-hidden="true" />
+        <p>No se encontraron equipos.</p>
+      </div>
+
+      <!-- M4: listado -->
+      <ion-list v-else>
+        <ion-item v-for="equipo in equipos" :key="equipo.id"
+          :router-link="`/tabs/equipos/${equipo.id}/editar`">
+          <ion-label>
+            <h2>{{ equipo.nombre }}</h2>
+            <p>{{ equipo.codigo }} · {{ equipo.categoria.nombre }}</p>
+          </ion-label>
+          <ion-badge slot="end" :color="colorEstado[equipo.estado]">{{ equipo.estado }}</ion-badge>
+        </ion-item>
+      </ion-list>
+
+      <!-- M4: siguiente página; se apaga cuando current_page === last_page -->
+      <ion-infinite-scroll @ionInfinite="cargarMas" :disabled="!hayMas">
+        <ion-infinite-scroll-content></ion-infinite-scroll-content>
+      </ion-infinite-scroll>
     </ion-content>
   </ion-page>
 </template>
@@ -52,10 +80,8 @@ import { ErrorApi } from '@/services/errores';
 import { mostrarToast } from '@/services/avisos';
 import { useConexion, vibrar } from '@/composables/useConexion';
 
-// Importaciones disponibles para su template (evita advertencias mientras no las use)
-void [IonRefresher, IonRefresherContent, IonList, IonItem, IonLabel, IonSkeletonText, IonBadge,
-  IonItemSliding, IonItemOptions, IonItemOption, IonInfiniteScroll, IonInfiniteScrollContent,
-  cloudOfflineOutline, searchOutline, trashOutline];
+// Importaciones que aún no se usan en el template (se usan en M6)
+void [IonItemSliding, IonItemOptions, IonItemOption, trashOutline];
 
 const colorEstado: Record<Estado, string> = { disponible: 'success', prestado: 'warning', mantenimiento: 'medium' };
 
@@ -70,32 +96,57 @@ const error = ref('');
 const hayMas = computed(() => pagina.value < ultimaPagina.value);
 
 /**
- * TODO [M4] cargar(reiniciar)
+ * cargar(reiniciar) — M4.
  *  - reiniciar = true  → pide la página 1 y REEMPLAZA la lista.
  *  - reiniciar = false → pide la página siguiente y la AGREGA al final.
- *  - Use listar(pagina, q) de services/equipos.ts y actualice pagina/ultimaPagina con meta.
- *  - Maneje cargando y error (un 401 ya lo resuelve api.ts).
+ *  - Usa listar(pagina, q) de services/equipos.ts y actualiza pagina/ultimaPagina con meta.
+ *  - Maneja cargando y error (un 401 ya lo resuelve api.ts).
  */
 async function cargar(reiniciar = false) {
-  void [reiniciar, listar, equipos, pagina, ultimaPagina, cargando, error];
+  cargando.value = true;
+  error.value = '';
+  try {
+    const numeroPagina = reiniciar ? 1 : pagina.value + 1;
+    const respuesta = await listar(numeroPagina, q.value);
+    equipos.value = reiniciar
+      ? respuesta.data
+      : [...equipos.value, ...respuesta.data];
+    pagina.value = respuesta.meta.current_page;
+    ultimaPagina.value = respuesta.meta.last_page;
+  } catch (e) {
+    // En un 401 api.ts ya olvidó la sesión y navegó a /login: no hay nada que avisar.
+    if (e instanceof ErrorApi && e.status === 401) return;
+    error.value = e instanceof ErrorApi ? e.message : 'No fue posible cargar los equipos.';
+  } finally {
+    cargando.value = false;
+  }
 }
 
-/**
- * TODO [M4] La lista debe recargarse CADA VEZ que la persona vuelve a esta página
- *           (por ejemplo, al regresar del formulario). Elija el hook de ciclo de vida correcto.
- */
-void onIonViewWillEnter;
+// M4: recargar CADA VEZ que se vuelve a esta página (p. ej. al regresar del formulario).
+// onIonViewWillEnter, no onMounted: Ionic mantiene la vista viva al navegar de vuelta.
+onIonViewWillEnter(() => {
+  void cargar(true);
+});
 
 const buscar = () => cargar(true);
 
-/** TODO [M4] Recargar desde la página 1 y cerrar el refresher (evento.target.complete()). */
+/** M4: recarga desde la página 1 y cierra el refresher siempre, aunque falle. */
 async function refrescar(evento: RefresherCustomEvent) {
-  void evento;
+  try {
+    await cargar(true);
+  } finally {
+    evento.target.complete();
+  }
 }
 
-/** TODO [M4] Cargar la página siguiente y cerrar el infinite scroll (evento.target.complete()). */
+/** M4: carga la siguiente página y cierra el infinite scroll siempre, aunque falle. */
 async function cargarMas(evento: InfiniteScrollCustomEvent) {
-  void evento;
+  try {
+    // Guarda contra disparos repetidos mientras una carga está en curso.
+    if (!cargando.value && hayMas.value) await cargar(false);
+  } finally {
+    evento.target.complete();
+  }
 }
 
 /**
@@ -112,5 +163,5 @@ async function confirmarEliminacion(equipo: Equipo, evento: Event) {
   void [equipo, evento, alertController, ErrorApi, mostrarToast, vibrar, eliminar];
 }
 
-void [refrescar, cargarMas, confirmarEliminacion, colorEstado, hayMas];
+void [confirmarEliminacion]; // M6, aún pendiente
 </script>
