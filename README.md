@@ -1,4 +1,4 @@
-# IF0009 · Examen II · Préstamos Móvil
+# IF0009 · Examen II · Préstamos Castro
 
 App móvil **Ionic 9 + Capacitor 8 + Vue 3** que consume la API de *Préstamo de Equipos* del Examen I.
 
@@ -57,10 +57,20 @@ Cada comentario `TODO` describe exactamente lo que se espera. Los archivos marca
 Guarde en `app/docs/evidencia-android.png` una captura de **su** app corriendo en el emulador,
 en la pestaña **Perfil** (debe verse *Plataforma: android*), y complete:
 
-- Carné:
-- appId:
+- Carné: `c1893`
+- appId: `cr.ac.ucr.if0009.c1893`
+- appName: `Préstamos Castro`
 - Versión de Node / Ionic CLI / Capacitor (`node -v`, `ionic -v`, `npx cap -V`):
-- ¿Se generó el APK de depuración? (sí/no):
+  - Node.js **v24.21.0** · npm 11.19.0
+  - Ionic CLI **7.2.1**
+  - Capacitor CLI **8.6.2**
+- ¿Se generó el APK de depuración? (sí/no): **sí** — `android/app/build/outputs/apk/debug/app-debug.apk`
+
+La identidad personal está en los tres archivos que exige la rúbrica: `capacitor.config.ts`
+(`appId`/`appName`), `android/app/build.gradle` (`namespace` y `applicationId`) y
+`android/app/src/main/res/values/strings.xml` (`app_name`, `title_activity_main`,
+`package_name`, `custom_url_scheme`); el paquete de `MainActivity.java` se movió a
+`cr/ac/ucr/if0009/c1893/` para que coincida con el `namespace`.
 
 ## Reglas
 
