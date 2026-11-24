@@ -97,29 +97,100 @@ const estadoActual = ref<Estado>('disponible');
 const errores = ref<Record<string, string>>({});
 
 /**
- * TODO [M5] Al entrar a la página:
+ * Al entrar a la página — M5:
  *  - Cargar las categorías para el ion-select (categorias()).
  *  - Nuevo: dejar el formulario vacío con vacio().
- *  - Edición: obtener(id) y llenar datos. Guarde el estado actual en estadoActual.
+ *  - Edición: obtener(id) y llenar datos. Guarda el estado actual en estadoActual.
  *    costo_interno queda en null: la API no lo devuelve (EquipoResource lo oculta).
  *  - 404 → toast y volver a /tabs/equipos.
  */
 onIonViewWillEnter(async () => {
   errores.value = {};
-  void [categorias, obtener, listaCategorias, estadoActual, ionRouter];
+  try {
+    listaCategorias.value = await categorias();
+
+    if (!id) {
+      // Nuevo: formulario en blanco (también limpia lo que hubiera de una edición previa).
+      Object.assign(datos, vacio());
+      estadoActual.value = 'disponible';
+      return;
+    }
+
+    // Edición: precargar desde la API.
+    const equipo = await obtener(id);
+    datos.codigo = equipo.codigo;
+    datos.nombre = equipo.nombre;
+    datos.categoria_id = equipo.categoria.id;
+    datos.fecha_adquisicion = equipo.fecha_adquisicion;
+    // costo_interno no viaja de vuelta (EquipoResource lo oculta): se vuelve a ingresar.
+    datos.costo_interno = null;
+    // Si está prestado el select de estado no se muestra ni se envía.
+    datos.estado = equipo.estado === 'prestado' ? 'disponible' : equipo.estado;
+    estadoActual.value = equipo.estado;
+  } catch (e) {
+    // En un 401 api.ts ya olvidó la sesión y navegó a /login.
+    if (e instanceof ErrorApi && e.status === 401) return;
+    if (e instanceof ErrorApi && e.status === 404) {
+      mostrarToast('El equipo ya no existe.', 'danger');
+      ionRouter.navigate('/tabs/equipos', 'root', 'replace');
+      return;
+    }
+    mostrarToast('No fue posible cargar los datos del formulario.', 'danger');
+  }
 });
 
 /**
- * TODO [M5] guardar()
- *  1. Mostrar loadingController ("Guardando…") y cerrarlo SIEMPRE, salga bien o mal.
- *  2. Enviar el cuerpo con código en mayúscula y sin espacios sobrantes, y costo_interno como número.
- *     Si el equipo está prestado, no envíe el campo estado.
+ * guardar() — M5.
+ *  1. loadingController ("Guardando…") y cerrarlo SIEMPRE, salga bien o mal.
+ *  2. Cuerpo con código en mayúscula y sin espacios sobrantes, y costo_interno como número.
+ *     Si el equipo está prestado, no se envía el campo estado.
  *  3. Nuevo → crear(); edición → actualizar(id).
- *  4. Éxito: vibrar() [M7], toast y volver a la lista con useIonRouter (back si se puede).
- *  5. 422 → mostrar el primer mensaje de cada campo debajo de su campo (error.erroresPorCampo).
+ *  4. Éxito: vibrar() [M7], toast y vuelta a la lista con useIonRouter (back si se puede).
+ *  5. 422 → primer mensaje de cada campo debajo de su campo (error.erroresPorCampo).
  *     404 → toast "El equipo ya no existe."   ·   otros → toast genérico.
  */
 async function guardar() {
-  void [loadingController, actualizar, crear, ErrorApi, mostrarToast, vibrar];
+  errores.value = {};
+
+  // 1. Loading que SIEMPRE se cierra, salga bien o mal (try/finally).
+  const cargando = await loadingController.create({ message: 'Guardando…' });
+  await cargando.present();
+
+  try {
+    // 2. Cuerpo normalizado: código en mayúscula y sin espacios, costo como número.
+    const crudo = String(datos.costo_interno ?? '').trim();
+    const cuerpo: DatosEquipo = {
+      codigo: datos.codigo.trim().toUpperCase(),
+      nombre: datos.nombre.trim(),
+      categoria_id: datos.categoria_id,
+      fecha_adquisicion: datos.fecha_adquisicion,
+      costo_interno: crudo === '' ? null : Number(crudo),
+    };
+    // Equipo prestado: el campo estado no se envía (la API lo rechazaría con 422).
+    if (estadoActual.value !== 'prestado') cuerpo.estado = datos.estado ?? 'disponible';
+
+    // 3. Crear o actualizar según corresponda.
+    if (id) await actualizar(id, cuerpo);
+    else await crear(cuerpo);
+
+    // 4. Éxito: feedback y vuelta a la lista (back si hay pila de navegación).
+    await vibrar();
+    mostrarToast('Equipo guardado.', 'success');
+    if (ionRouter.canGoBack()) ionRouter.back();
+    else ionRouter.navigate('/tabs/equipos', 'root', 'replace');
+  } catch (e) {
+    if (e instanceof ErrorApi && e.status === 422) {
+      // 5. Un mensaje por campo, debajo de cada campo en el template.
+      errores.value = e.erroresPorCampo;
+    } else if (e instanceof ErrorApi && e.status === 404) {
+      mostrarToast('El equipo ya no existe.', 'danger');
+    } else if (e instanceof ErrorApi && e.status === 401) {
+      // api.ts ya olvidó la sesión y navegó a /login.
+    } else {
+      mostrarToast('No fue posible guardar. Verifique la conexión.', 'danger');
+    }
+  } finally {
+    await cargando.dismiss();
+  }
 }
 </script>
