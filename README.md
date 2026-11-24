@@ -11,6 +11,19 @@ app/       App móvil. Aquí están los TODO M1–M8.
 
 Requisitos: PHP 8.4+, Composer, Node.js 22+, Android Studio con un emulador (API 24+), `npm i -g @ionic/cli`.
 
+> **Java para compilar el APK:** Gradle 8.14.3 no soporta Java 25 (falla con
+> *"Unsupported class file major version 69"*). Si el `java -version` de la máquina da 25,
+> apunte Gradle a un JDK 17/21 antes de compilar:
+>
+> ```powershell
+> $env:JAVA_HOME = "C:\Program Files\Java\jdk-21"   # o su ruta equivalente
+> cd app\android
+> .\gradlew.bat assembleDebug
+> ```
+>
+> Con Android Studio no hace falta nada: su JBR propio ya es compatible.
+> Esto **no** afecta al navegador ni a la API (son Node y PHP).
+
 ```bash
 # 1. API  →  http://localhost:8000/api
 cd backend
